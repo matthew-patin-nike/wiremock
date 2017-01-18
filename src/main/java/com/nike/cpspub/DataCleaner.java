@@ -21,6 +21,8 @@ public class DataCleaner extends ResponseTransformer {
 
     private List<String> keysToClean;
     private Map<String, Map<String, String>> valuesToMapByDivisionKey;
+    private String mockBaseUrl;
+    private String cpsPubUrl;
 
     @Override
     public Response transform(Request request, Response response, FileSource files, Parameters parameters) {
@@ -36,6 +38,16 @@ public class DataCleaner extends ResponseTransformer {
         valuesToMapByDivisionKey = (Map<String, Map<String, String>>) parameters.get("valuesToMapByDivisionKey");
         if (valuesToMapByDivisionKey.size() == 0) {
             throw new RuntimeException("Transformer missing valuesToMapByDivisionKey, add them to options.json");
+        }
+
+        mockBaseUrl = (String) parameters.get("mockBaseUrl");
+        if (mockBaseUrl == null) {
+            throw new RuntimeException("Transformer missing mockBaseUrl, add it to options.json");
+        }
+
+        cpsPubUrl =  (String) parameters.get("cpsPubUrl");
+        if (cpsPubUrl == null) {
+            throw new RuntimeException("Transformer missing cpsPubUrl, add it to options.json");
         }
 
         String cleaned = ""; //we'd rather return nothing than unclean json.
@@ -76,6 +88,9 @@ public class DataCleaner extends ResponseTransformer {
     }
 
     private void setSpecificGlobalOfferingKeys(JsonNode parent) {
+
+        fixLinks(parent);
+
         JsonNode globalOfferings = parent.get("content");
         for (final JsonNode objNode : globalOfferings) {
             try {
@@ -86,6 +101,17 @@ public class DataCleaner extends ResponseTransformer {
             } catch (Exception ex) {
                 ex.printStackTrace();
                 // do nothing, we got everything already with the fallback, this is just to make it pretty
+            }
+        }
+    }
+
+    private void fixLinks(JsonNode parent) {
+        JsonNode links = parent.get("links");
+        for (JsonNode link : links) {
+            String href = link.get("href").asText();
+            if (! href.isEmpty()) {
+                ObjectNode modifiable = (ObjectNode) link;
+                modifiable.put("href", href.replace(cpsPubUrl, mockBaseUrl));
             }
         }
     }
