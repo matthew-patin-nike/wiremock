@@ -17,6 +17,9 @@ package com.github.tomakehurst.wiremock.client;
 
 import com.github.tomakehurst.wiremock.admin.model.ListStubMappingsResult;
 import com.github.tomakehurst.wiremock.admin.model.SingleStubMappingResult;
+import com.github.tomakehurst.wiremock.recording.RecordingStatusResult;
+import com.github.tomakehurst.wiremock.recording.SnapshotRecordResult;
+import com.github.tomakehurst.wiremock.recording.RecordSpecBuilder;
 import com.github.tomakehurst.wiremock.common.FileSource;
 import com.github.tomakehurst.wiremock.common.SingleRootFileSource;
 import com.github.tomakehurst.wiremock.core.Admin;
@@ -41,6 +44,8 @@ import java.util.UUID;
 import static com.github.tomakehurst.wiremock.matching.RequestPattern.thatMatch;
 import static com.github.tomakehurst.wiremock.matching.RequestPatternBuilder.allRequests;
 import static com.google.common.collect.FluentIterable.from;
+import static com.google.common.net.HttpHeaders.CONTENT_TYPE;
+import static com.google.common.net.HttpHeaders.LOCATION;
 
 
 public class WireMock {
@@ -81,6 +86,10 @@ public class WireMock {
 	public WireMock(String scheme, String host, int port, String urlPathPrefix) {
 		admin = new HttpAdminClient(scheme, host, port, urlPathPrefix);
 	}
+
+    public WireMock(String scheme, String host, int port, String urlPathPrefix, String hostHeader, String proxyHost, int proxyPort) {
+        admin = new HttpAdminClient(scheme, host, port, urlPathPrefix, hostHeader, proxyHost, proxyPort);
+    }
 
 	public WireMock() {
 		admin = new HttpAdminClient(DEFAULT_HOST, DEFAULT_PORT);
@@ -134,12 +143,24 @@ public class WireMock {
 		defaultInstance.set(new WireMock(scheme, host, port));
 	}
 
+    public static void configureFor(String scheme, String host, int port, String proxyHost, int proxyPort) {
+        defaultInstance.set(new WireMock(scheme, host, port, "", null, proxyHost, proxyPort));
+    }
+
 	public static void configure() {
 		defaultInstance.set(new WireMock());
 	}
 
     public static StringValuePattern equalTo(String value) {
         return new EqualToPattern(value);
+    }
+
+    public static BinaryEqualToPattern binaryEqualTo(byte[] content) {
+        return new BinaryEqualToPattern(content);
+    }
+
+    public static BinaryEqualToPattern binaryEqualTo(String content) {
+        return new BinaryEqualToPattern(content);
     }
 
 	public static StringValuePattern equalToIgnoreCase(String value) {
@@ -158,6 +179,10 @@ public class WireMock {
         return new MatchesJsonPathPattern(value);
     }
 
+    public static StringValuePattern matchingJsonPath(String value, StringValuePattern valuePattern) {
+        return new MatchesJsonPathPattern(value, valuePattern);
+    }
+
     public static StringValuePattern equalToXml(String value) {
         return new EqualToXmlPattern(value);
     }
@@ -168,6 +193,10 @@ public class WireMock {
 
     public static StringValuePattern matchingXPath(String value, Map<String, String> namespaces) {
         return new MatchesXPathPattern(value, namespaces);
+    }
+
+    public static StringValuePattern matchingXPath(String value, StringValuePattern valuePattern) {
+        return new MatchesXPathPattern(value, valuePattern);
     }
 
     public static StringValuePattern containing(String value) {
@@ -360,6 +389,105 @@ public class WireMock {
 		return new ResponseDefinitionBuilder();
 	}
 
+    public static ResponseDefinitionBuilder ok() {
+        return aResponse().withStatus(200);
+    }
+
+    public static ResponseDefinitionBuilder ok(String body) {
+        return aResponse().withStatus(200).withBody(body);
+    }
+
+    public static ResponseDefinitionBuilder okForContentType(String contentType, String body) {
+        return aResponse()
+            .withStatus(200)
+            .withHeader(CONTENT_TYPE, contentType)
+            .withBody(body);
+    }
+
+    public static ResponseDefinitionBuilder okJson(String body) {
+        return okForContentType("application/json", body);
+    }
+
+    public static ResponseDefinitionBuilder okXml(String body) {
+        return okForContentType("application/xml", body);
+    }
+
+    public static ResponseDefinitionBuilder okTextXml(String body) {
+        return okForContentType("text/xml", body);
+    }
+
+    public static MappingBuilder proxyAllTo(String url) {
+        return any(anyUrl()).willReturn(aResponse().proxiedFrom(url));
+    }
+
+    public static MappingBuilder get(String url) {
+        return get(urlEqualTo(url));
+    }
+
+    public static MappingBuilder post(String url) {
+        return post(urlEqualTo(url));
+    }
+
+    public static MappingBuilder put(String url) {
+        return put(urlEqualTo(url));
+    }
+
+    public static MappingBuilder delete(String url) {
+        return delete(urlEqualTo(url));
+    }
+
+    public static ResponseDefinitionBuilder created() {
+        return aResponse().withStatus(201);
+    }
+
+    public static ResponseDefinitionBuilder noContent() {
+        return aResponse().withStatus(204);
+    }
+
+    public static ResponseDefinitionBuilder permanentRedirect(String location) {
+        return aResponse().withStatus(301).withHeader(LOCATION, location);
+    }
+
+    public static ResponseDefinitionBuilder temporaryRedirect(String location) {
+        return aResponse().withStatus(302).withHeader(LOCATION, location);
+    }
+
+    public static ResponseDefinitionBuilder seeOther(String location) {
+        return aResponse().withStatus(303).withHeader(LOCATION, location);
+    }
+
+    public static ResponseDefinitionBuilder badRequest() {
+        return aResponse().withStatus(400);
+    }
+
+    public static ResponseDefinitionBuilder badRequestEntity() {
+        return aResponse().withStatus(422);
+    }
+
+    public static ResponseDefinitionBuilder unauthorized() {
+        return aResponse().withStatus(401);
+    }
+
+    public static ResponseDefinitionBuilder forbidden() {
+        return aResponse().withStatus(403);
+    }
+
+    public static ResponseDefinitionBuilder notFound() {
+        return aResponse().withStatus(404);
+    }
+
+    public static ResponseDefinitionBuilder serverError() {
+        return aResponse().withStatus(500);
+    }
+
+    public static ResponseDefinitionBuilder serviceUnavailable() {
+        return aResponse().withStatus(503);
+    }
+
+    public static ResponseDefinitionBuilder status(int status) {
+        return aResponse().withStatus(status);
+    }
+
 	public void verifyThat(RequestPatternBuilder requestPatternBuilder) {
 		verifyThat(moreThanOrExactly(1), requestPatternBuilder);
 	}
@@ -549,4 +677,56 @@ public class WireMock {
 		FileSource mappingsSource = new SingleRootFileSource(rootDir);
 		new RemoteMappingsLoader(mappingsSource, this).load();
 	}
+
+    public static List<StubMapping> snapshotRecord() {
+        return defaultInstance.get().takeSnapshotRecording();
+    }
+
+    public static List<StubMapping> snapshotRecord(RecordSpecBuilder spec) {
+        return defaultInstance.get().takeSnapshotRecording(spec);
+    }
+
+    public List<StubMapping> takeSnapshotRecording() {
+        return admin.snapshotRecord().getStubMappings();
+    }
+
+    public List<StubMapping> takeSnapshotRecording(RecordSpecBuilder spec) {
+        return admin.snapshotRecord(spec.build()).getStubMappings();
+    }
+
+    public static void startRecording(String targetBaseUrl) {
+        defaultInstance.get().startStubRecording(targetBaseUrl);
+    }
+
+    public static void startRecording(RecordSpecBuilder spec) {
+        defaultInstance.get().startStubRecording(spec);
+    }
+
+    public void startStubRecording(String targetBaseUrl) {
+        admin.startRecording(targetBaseUrl);
+    }
+
+    public void startStubRecording(RecordSpecBuilder spec) {
+        admin.startRecording(spec.build());
+    }
+
+    public static SnapshotRecordResult stopRecording() {
+        return defaultInstance.get().stopStubRecording();
+    }
+
+    public SnapshotRecordResult stopStubRecording() {
+        return admin.stopRecording();
+    }
+
+    public static RecordingStatusResult getRecordingStatus() {
+        return defaultInstance.get().getStubRecordingStatus();
+    }
+
+    public RecordingStatusResult getStubRecordingStatus() {
+        return admin.getRecordingStatus();
+    }
+
+    public static RecordSpecBuilder recordSpec() {
+        return new RecordSpecBuilder();
+    }
 }
